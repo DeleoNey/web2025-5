@@ -2,6 +2,7 @@ const http = require("http");
 const { Command } = require("commander");
 const fs = require("fs");
 const path = require("path");
+const superagent = require("superagent");
 
 const program = new Command();
 
@@ -43,8 +44,8 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { "Content-Type": "image/jpeg" });
         res.end(fileData);
       } catch (err) {
-        res.writeHead(404, { "Content-Type": "text/plain" });
-        res.end("File not found");
+        // Якщо файл не знайдено в кеші, завантажуємо з http.cat
+        await fetchAndCacheImage(statusCode, filePath, res);
       }
     } else if (req.method === "PUT") {
       const fileStream = fs.createWriteStream(filePath);
@@ -71,6 +72,19 @@ const server = http.createServer(async (req, res) => {
     res.end("Server error");
   }
 });
+
+// Функція для завантаження та кешування картинки з http.cat
+async function fetchAndCacheImage(statusCode, filePath, res) {
+  try {
+    const response = await superagent.get(`https://http.cat/${statusCode}`);
+    await fsPromises.writeFile(filePath, response.body);
+    res.writeHead(200, { "Content-Type": "image/jpeg" });
+    res.end(response.body);
+  } catch {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Image not found on http.cat");
+  }
+}
 
 server.listen(port, host, () => {
   console.log(`Сервер запущено на http://${host}:${port}`);
